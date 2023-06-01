@@ -1,0 +1,242 @@
+---
+title: "Untitled"
+author: "Mariama Soumahoro"
+date: "2/17/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r , echo=TRUE,warning=FALSE,message=FALSE, eval=TRUE}
+
+getwd()
+dir()
+library(tidyverse)
+library(ggpubr)
+library(easynls)
+library(tidyverse)
+library(corrplot)
+library(FSA)
+library(nlstools)
+library(caret)
+library(minpack.lm)
+library(tidyverse)
+library(growthcurver)
+library(dplyr)
+library(reshape2)
+library(growthrates)
+library(deSolve)
+library(nlme)
+library(plotly)
+#library(bbmle)
+library(reshape2)
+
+library("openxlsx")
+foamheight <- read.xlsx("/Users/mariamasoumahoro/Desktop/2021 Data Analytics/Data for Foam Height.xlsx")
+sum(is.na(foamheight)) # number of total missing values
+nrow(foamheight) # sample size
+ncol(foamheight) # number of columns
+str(foamheight)
+summary(foamheight)
+view(foamheight)
+
+ggplot(foamheight, aes(x = Time, y = FoamHeight)) +
+  geom_point() +
+  stat_smooth()
+
+ggplot(foamheight, aes(x = LiquidHeight, y = FoamHeight)) +
+  geom_point() +
+  stat_smooth()
+
+cor(foamheight$FoamHeight, foamheight$LiquidHeight) # get the correlation (we have a strong negative linear relation between the two variables :  -0.968875)
+
+cor(foamheight$FoamHeight, foamheight$Time) # get the correlation (we have a strong negative linear relation between the two variables: -0.9515949)
+
+foamheight.lm <- lm(data=foamheight, FoamHeight ~ Time + LiquidHeight )
+print (summary(foamheight.lm))
+
+AIC(foamheight.lm)
+BIC(foamheight.lm)
+
+ggplot(foamheight, aes(LiquidHeight, FoamHeight)) +
+  geom_point() +
+  stat_smooth(method = lm)
+
+ggplot(foamheight, aes(Time, FoamHeight)) +
+  geom_point() +
+  stat_smooth(method = lm) 
+
+#checking for residual plots
+par(mfrow=c(2,2))
+plot(foamheight.lm)
+
+# RSE and Percentage Error compuation
+confint(foamheight.lm) # Confidence Interval for parameters
+sigma(foamheight.lm) # computes RSE (0.27)
+mean(foamheight$FoamHeight) # computes mean of FoamHeight variable (8.48)
+sigma(foamheight.lm)*100/mean(foamheight$FoamHeight) # Computes percentage error (3.13)
+# getting the R-square
+summary(foamheight.lm)$r.squared #(0.9973802)
+
+#Adding Quadratic terms
+##Plot the residual plot with all predictors.
+attach(foamheight)
+require(gridExtra)
+plot1 = ggplot(foamheight, aes(Time, residuals(foamheight.lm))) + geom_point() + geom_smooth()
+plot2=ggplot(foamheight, aes(LiquidHeight, residuals(foamheight.lm))) + geom_point() + geom_smooth()
+grid.arrange(plot1,plot2,ncol=5,nrow=2)
+
+
+foamheight.lm1 <- lm(data=foamheight, FoamHeight ~ Time + LiquidHeight + I(Time^2) + I(Time^3)+ I(Time^4) +I(LiquidHeight^2) + I(LiquidHeight^3) + I(LiquidHeight^3) + I(LiquidHeight^5))
+print (summary(foamheight.lm1))
+
+ #Stepwise regression with the quadratic terms
+# You need to specify the beginning model and the model direction you want to go
+First <- lm(FoamHeight~1, data=foamheight) # Fit only a constant term
+All <- lm(data=foamheight, FoamHeight ~ Time + LiquidHeight + I(Time^2) + I(Time^3)+ I(Time^4) + I(Time^5) +I(LiquidHeight^2) + I(LiquidHeight^3) + I(LiquidHeight^3) + I(LiquidHeight^5)) # Fit all variables
+# summary(All)
+step(First, direction="forward", scope=formula(All)) # this will fit forward selection from "First" and going to "All"
+
+step(All, direction="backward", scope=formula(First)) # this will fit Backward selection from "All" and going to "First"
+
+step(First, direction="both", scope=formula(All)) # this will fit forward selection from "First" and going to "All"
+
+# Lets consider the model selected by Stepwise procedure
+Stepwise.model.lm <- lm(data=foamheight, FoamHeight ~ Time + LiquidHeight  + I(Time^3)+   I(LiquidHeight^2) + I(LiquidHeight^5))
+print (summary(Stepwise.model.lm))
+pred.lm<- predict(Stepwise.model.lm)
+pred.lm
+AIC(Stepwise.model.lm)
+BIC(Stepwise.model.lm)
+
+# RSE and Percentage Error compuation
+sigma(Stepwise.model.lm) # computes RSE
+mean(foamheight$FoamHeight) # computes mean of mpg
+sigma(Stepwise.model.lm)*100/mean(foamheight$FoamHeight) # Computes percentage error
+# getting the R-square
+summary(Stepwise.model.lm)$r.squared 
+
+#Final model: Remove hl^5
+Stepwise.lm1 <- lm(data=foamheight, FoamHeight ~ Time + LiquidHeight  + I(Time^3)+   I(LiquidHeight^2))
+print (summary(Stepwise.lm1))
+pred.lm1<- predict(Stepwise.lm1)
+pred.lm1
+
+AIC(Stepwise.lm1)
+BIC(Stepwise.lm1)
+
+#checking for residual plots
+par(mfrow=c(2,2))
+plot(Stepwise.lm1)
+
+# RSE and Percentage Error compuation
+sigma(Stepwise.lm1) # computes RSE
+mean(foamheight$FoamHeight) # computes mean of foamheight
+sigma(Stepwise.lm1)*100/mean(foamheight$FoamHeight) # Computes percentage error
+# getting the R-square
+summary(Stepwise.lm1)$r.squared 
+
+#to check normality of the data
+shapiro.test(Stepwise.lm1$residuals)
+#check influential points again
+influence.measures(Stepwise.lm1) #we get 27 inflential points
+outlierTest(Stepwise.lm1)
+
+
+## NON LINEAR REGRESSION MODEL
+
+#for liquid height only
+a_start <- 17
+b_start <- -2 * log(2)/a_start
+
+m <- nls(FoamHeight ~ a * exp(b * LiquidHeight), start = list(a = a_start,
+                                           b = b_start ), data=foamheight)
+summary(m)
+#checking for the fit
+cor(FoamHeight,predict(m))
+foamheight$FoamHeight
+ pred.nls1<- predict(m)
+ 
+ggplot(foam, aes(x = LiquidHeight, y = FoamHeight) ) +
+  geom_point() +
+  geom_line(aes(y = pred.nls1), size = 1)
+AIC(m)
+
+
+
+# 1st Non-linear model with both predictors
+nls.m <- nls(FoamHeight ~ (a*LiquidHeight + b*Time)/(b+LiquidHeight + d+ Time), 
+             start=c(a=3, b=2, d=2),data=foamheight)
+summary(nls.m)
+AIC(nls.m) :25.25
+
+#checking for the fit
+cor(FoamHeight,predict(nls.m))
+foamheight$FoamHeight
+ pred.nl<- predict(nls.m)
+ 
+ggplot(foam, aes(x = LiquidHeight, y = FoamHeight) ) +
+  geom_point() +
+  geom_line(aes(y = pred.nl), size = 1)
+
+#2nd  non linear model(did not work)
+
+nlmodel1 <- nls(FoamHeight ~ exp(a*Time + b/LiquidHeight), data=foamheight, start=c(a=0,b=17))
+summary(nlmodel1)
+
+#checking for the fit
+cor(FoamHeight,predict(nlmodel1)) :0.33
+foamheight$FoamHeight
+ pred.nls2<- predict(nlmodel1)
+ 
+ggplot(foamheight, aes(x = LiquidHeight, y = FoamHeight) ) +
+  geom_point() +
+  geom_line(aes(y = pred.nls2), size = 1)
+
+ggplot(foamheight, aes(x = Time, y = FoamHeight) ) +
+  geom_point() +
+  geom_line(aes(y = pred.nls2), size = 1)
+
+#3rd
+nlmodel2<- nls(FoamHeight~ exp(a*Time + b*LiquidHeight),data=foamheight,start = list(a = 0,
+                                           b = 0 ) )
+summary(nlmodel2)
+#checking for the fit
+cor(FoamHeight,predict(nlmodel2)) :0.37
+foamheight$FoamHeight
+ pred.nls3<- predict(nlmodel2)
+ 
+ggplot(foamheight, aes(x = LiquidHeight, y = FoamHeight) ) +
+  geom_point() +
+  geom_line(aes(y = pred.nls3), size = 1)
+
+ggplot(foamheight, aes(x = Time, y = FoamHeight) ) +
+  geom_point() +
+  geom_line(aes(y = pred.nls3), size = 1)
+
+#4th model
+
+nlmodel3 <- nls(FoamHeight~a+exp(Time+LiquidHeight),data=foamheight,start=c(a=17))
+summary(nlmodel3)
+
+#checking for the fit
+cor(FoamHeight,predict(nlmodel3)) :-0.35
+foamheight$FoamHeight
+ 
+pred.nls4<- predict(nlmodel3)
+ 
+ggplot(foamheight, aes(x = LiquidHeight, y = FoamHeight) ) +
+  geom_point() +
+  geom_line(aes(y = pred.nls4), size = 1)
+
+ggplot(foamheight, aes(x = Time, y = FoamHeight) ) +
+  geom_point() +
+  geom_line(aes(y = pred.nls4), size = 1)
+
+##5th model
+
+nlmodel4<- nls(FoamHeight~a-b*exp(LiquidHeight+Time),start = list(a = 1, b =1, c=1), data=foamheight)
+
+```

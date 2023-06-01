@@ -1,0 +1,267 @@
+---
+title: "Homework3"
+author: "Mariama Soumahoro"
+date: "10/31/2020"
+output: pdf_document
+---
+
+
+
+
+* Y house price of unit area: this represents the price of thr houses per unit area. it is the dependent variable.
+
+The 6 independent variables or predictors are:
+
+* X1 transaction date: the date the house was bought
+
+* X2 house age: the house's age in years
+
+* X3 distance to the nearest MRT station : the distance between the house and the nearest Medical Response Team like a Fire station or hospital. It is taken into account while setting the price of a house. The closer you are, the higher your property value will be. 
+
+* X4 number of convenience stores : It reprensents how close you are from different stores. It increases the value of the property if it is close to attractions and stores and coffee shops.The closer you are the higher your property value can be.
+
+* X5 latitude 
+
+* X6 longitude
+
+We start by reading the data in and check if there are any missing valuesl, the sample size and the number of columns.
+
+
+```{r , echo=TRUE,warning=FALSE,message=FALSE, eval=TRUE}
+real_estate<- read.csv("/Users/mariamasoumahoro/Downloads/Real Estate Price Prediction.csv", header = TRUE)
+#Remove a column
+real_estate$No <- NULL 
+head(real_estate)
+#Rename columns now
+library(dplyr)
+real_estate1 <- real_estate %>% rename(transactiondate=X1.transaction.date,Houseage=X2.house.age,  distancetoMRTstation=X3.distance.to.the.nearest.MRT.station, numberconveniencestores=X4.number.of.convenience.stores, latitude=X5.latitude,longitude=X6.longitude, Price=Y.house.price.of.unit.area)
+head(real_estate1) 
+
+sum(is.na(real_estate1)) # number of total missing values
+nrow(real_estate1) # sample size
+ncol(real_estate1) # number of columns
+summary(real_estate1)
+```
+
+We have 0 missing values, 414 rows and 8 columns which is what we were expecting.
+
+Next, we view the data and try to understand the columns of the data a little bit better
+
+
+```{r , echo=TRUE,warning=FALSE,message=FALSE, eval=TRUE}
+#checking for the class of the predictors
+class(real_estate1$transactiondate)
+class(real_estate1$Houseage)
+class(real_estate1$distancetoMRTstation)
+class(real_estate1$numberconveniencestores)
+class(real_estate1$latitude)
+class(real_estate1$longitude)
+
+sapply(real_estate1, class)
+```
+All the predictors are numerical.
+
+```{r , echo=FALSE,warning=FALSE,message=FALSE, eval=FALSE}
+#We need to change the date predictor into a categorical predictor and assign it to the data
+# We will create transactiondate categories of A =<2012, B= 2012-2013, C=2013+(we only look at the month)
+
+Cattransactiondate <- cut(real_estate1$transactiondate, breaks = c(0,2012,2013,2014),labels=c("=<2012","2012-2013",">2013"))
+Cattransactiondate[1:10]
+
+#Next, we replace transaction date by the variable
+library(dplyr)
+real_estate1 <- real_estate1 %>%
+  mutate(transactiondate = Cattransactiondate)
+real_estate1 
+
+
+```
+
+We then plot the data to see if there exists a relation between the dependent variable price per square unit and independent variables
+
+```{r , echo=TRUE,warning=FALSE,message=FALSE, eval=TRUE}
+library(ggplot2)
+library(GGally)
+#Check for the plots and correlation
+ggpairs(real_estate1, title="correlogram with ggpairs()") 
+
+library(ggplot2)
+ggplot(real_estate1, aes(x =latitude  , y =Price)) + 
+ geom_point() + 
+stat_smooth() 
+cor(real_estate1$Price, real_estate1$latitude)
+
+#we check if there is interaction between the independent variables
+interaction.plot(real_estate1$transactiondate,real_estate1$Houseage,real_estate1$Price )
+
+interaction.plot(real_estate1$numberconveniencestores,real_estate1$distancetoMRTstation,real_estate1$Price )
+
+interaction.plot(real_estate1$Houseage,real_estate1$distancetoMRTstation,real_estate1$Price )
+interaction.plot(real_estate1$longitude,real_estate1$latitude,real_estate1$Price )
+interaction.plot(real_estate1$Houseage,real_estate1$distancetoMRTstation,real_estate1$Price )
+
+interaction.plot(real_estate1$Houseage,real_estate1$numberconveniencestores,real_estate1$Price )
+
+interaction.plot(real_estate1$Houseage,real_estate1$longitude,real_estate1$Price )
+
+interaction(real_estate1$Houseage,real_estate1$longitude,real_estate1$Price )
+
+```
+
+In the following model, I have selected ‘log’ transformation 
+
+```{r , echo=FALSE,warning=FALSE,message=FALSE, eval=FALSE}
+##Explore the data, distribution.
+ggplot(real_estate1, aes(Price)) + geom_density(fill="blue")
+ggplot(real_estate1, aes(log(Price))) + geom_density(fill="blue")
+ggplot(real_estate1, aes(sqrt(Price))) + geom_density(fill="blue")
+```
+
+#Model building
+
+```{r , echo=TRUE,warning=FALSE,message=FALSE, eval=TRUE}
+#Now as a first step we will fit the multiple regression models. We will start by taking all input variables in the multiple regression.
+price.lm1 <- lm(data=real_estate1, Price~.)
+print (summary(price.lm1))
+sigma(price.lm1) # check for the RSE
+summary(price.lm1)$r.squared
+summary(price.lm1)$adj.r.squared# check for the R-square
+
+```
+
+```{r , echo=TRUE,warning=FALSE,message=FALSE, eval=TRUE}
+#Next we use stepwise selection to fit the model to see if we get the same results
+Empty <- lm(Price~1, data=real_estate1) # Fit only a constant term
+summary(Empty)
+
+Full <- lm(data=real_estate1, Price~.) # Fit all variables
+summary(Full)
+
+step(Empty, direction="forward", scope=formula(Full)) # this will fit forward selection from "First" and going to "All"
+
+#Remove unwanted variables
+price.lm2 <- lm(data=real_estate1, Price~transactiondate+Houseage+distancetoMRTstation+numberconveniencestores+latitude)
+print (summary(price.lm2))
+sigma(price.lm2) # check for the RSE
+summary(price.lm2)$r.squared
+summary(price.lm2)$adj.r.squared# check for the R-square
+AIC(price.lm2)
+```
+
+
+* We next use the transformation to log to fit the data to see if we have a better adjusted r^squared.
+```{r , echo=TRUE,warning=FALSE,message=FALSE, eval=TRUE}
+price.lm3 <- lm(data=real_estate1, log(Price)~.)
+print (summary(price.lm3))
+sigma(price.lm3) # check for the RSE
+summary(price.lm3)$r.squared
+summary(price.lm3)$adj.r.squared# check for the R-square
+AIC(price.lm3)
+```
+The R^2 is a little bit better.We next remove longitude from the model and we check again.
+```{r , echo=TRUE,warning=FALSE,message=FALSE, eval=TRUE}
+#Remove longitude and fit again
+price.lm4 <- lm(data=real_estate1, log(Price)~transactiondate+Houseage+distancetoMRTstation+numberconveniencestores+latitude)
+print (summary(price.lm4))
+sigma(price.lm4) # check for the RSE
+summary(price.lm4)$r.squared
+summary(price.lm4)$adj.r.squared# check for the R-square
+AIC(price.lm4)
+```
+We decide to keep longitude in the model We continue our analysis by checking for the residual plots to see if they coincides with our previous findings. We observe the following:
+
+```{r , echo=TRUE,warning=FALSE,message=FALSE, eval=TRUE}
+#plotting residuals
+par(mfrow=c(2,2))
+plot(price.lm3)
+
+# Checking for possible transformations
+#ploting model residuals against perdictors to see if we can transform the predictors
+model.res <- resid(price.lm3)
+
+attach(real_estate1)
+require(gridExtra)
+
+plot1<-ggplot(real_estate1,aes(x=transactiondate, y=model.res)) + geom_point()+ geom_smooth(method='loess')+
+  labs(x="transactiondate", y="Residuals")+ theme_bw()
+
+plot2<-ggplot(real_estate1,aes(x=Houseage, y=model.res)) + geom_point()+ geom_smooth(method='loess')+
+  labs(x="Houseage", y="Residuals")+ theme_bw()
+
+plot3<-ggplot(real_estate1,aes(x=distancetoMRTstation, y=model.res)) + geom_point()+ geom_smooth(method='loess')+
+  labs(x="distancetoMRTstation", y="Residuals")+ theme_bw()
+
+plot4<-ggplot(real_estate1,aes(x=numberconveniencestores, y=model.res)) + geom_point()+ geom_smooth(method='loess')+
+  labs(x="numberofconveniencestore", y="Residuals")+ theme_bw()
+
+plot5<-ggplot(real_estate1,aes(x=latitude, y=model.res)) + geom_point()+ geom_smooth(method='loess')+
+  labs(x="latitude", y="Residuals")+ theme_bw()
+
+plot6<-ggplot(real_estate1,aes(x=longitude, y=model.res)) + geom_point()+ geom_smooth(method='loess')+
+  labs(x="longitude", y="Residuals")+ theme_bw()
+grid.arrange(plot1,plot2,plot3,plot4,plot5,plot6,ncol=5,nrow=2)
+
+```
+
+
+```{r , echo=TRUE,warning=FALSE,message=FALSE, eval=TRUE}
+#Now we do some transformation in the linear regression model by including polynomial factors
+price.lm3.1 <- lm(data=real_estate1, log(Price)~transactiondate+Houseage+distancetoMRTstation+numberconveniencestores+latitude+longitude+I(Houseage^2)+I(distancetoMRTstation^2)+I(numberconveniencestores^2)+I(latitude^2)+I(longitude^2))
+print (summary(price.lm3.1))
+AIC(price.lm3.1)
+
+#We remove the non significant variables(final model)
+price.lm3.2 <- lm(data=real_estate1, log(Price)~transactiondate+Houseage+distancetoMRTstation+numberconveniencestores+latitude+longitude+I(Houseage^2)+I(distancetoMRTstation^2)+I(latitude^2))
+print (summary(price.lm3.2))
+AIC(price.lm3.2)
+
+#Next, we plot again the residual plots
+par(mfrow=c(2,2))
+plot(price.lm3.2)
+
+#to check normality of the data
+shapiro.test(price.lm3.2$residuals)
+#check influential points again
+influence.measures(price.lm3.2) #we get 27 inflential points
+outlierTest(price.lm3.2)
+
+```
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+ 
+ 
+ 
